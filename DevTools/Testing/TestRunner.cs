@@ -62,6 +62,10 @@ public sealed class TestRunner
 
   public static TestRunner Current { get; private set; }
 
+  public bool KeepMapOnAbort { get; set; }
+
+  private bool BreakRequested { get; set; }
+
   private bool StopRequested { get; set; }
 
   public void And(Expression expression, Comparison comparison, string value)
@@ -139,6 +143,11 @@ public sealed class TestRunner
   public void SignalToStop()
   {
     StopRequested = true;
+  }
+
+  public void SignalToBreak()
+  {
+    BreakRequested = true;
   }
 
   private IEnumerator TestRoutine(TestFilter filter)
@@ -286,19 +295,19 @@ public sealed class TestRunner
               }
               finally
               {
-                if (!fixture.TearDown(instance))
+                if (!BreakRequested && !fixture.TearDown(instance))
                 {
                   Test.Fail($"Failed to tear down {fixture.Name}!");
                 }
               }
-            } while (attempts <= maxRetries && function.Status is Status.Failed);
+            } while (!BreakRequested && attempts <= maxRetries && function.Status is Status.Failed);
 
             report.Add(function);
 
-            if (ShouldStop(function))
+            if (BreakRequested || ShouldStop(function))
               break;
           }
-          if (!fixture.OneTimeTearDown(instance))
+          if (!BreakRequested && !fixture.OneTimeTearDown(instance))
           {
             Test.Fail($"Failed to tear down {fixture.Name}!");
             continue;
@@ -308,7 +317,7 @@ public sealed class TestRunner
         {
           try
           {
-            if (!RunPostTestActions(fixture))
+            if (!BreakRequested && !RunPostTestActions(fixture))
             {
               Test.Fail($"Failed post-test actions for {fixture.Name}!");
             }
@@ -322,12 +331,12 @@ public sealed class TestRunner
       Test.LogResults(fixture, functions);
       DevLog.Flush();
 
-      if (ShouldStop(fixture))
+      if (BreakRequested || ShouldStop(fixture))
         break;
     }
 
     // Open test results at main menu
-    if (Verse.Current.ProgramState != ProgramState.Entry)
+    if (Verse.Current.ProgramState != ProgramState.Entry && !KeepMapOnAbort)
     {
       GenScene.GoToMainMenu();
       while (Verse.Current.ProgramState != ProgramState.Entry ||

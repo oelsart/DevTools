@@ -83,6 +83,21 @@ public static class Test
       message: null);
   }
 
+  [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+  public static void Break(string message = null)
+  {
+    if (TestRunner.Current is not null)
+    {
+      TestRunner.Current.KeepMapOnAbort = true;
+      TestRunner.Current.SignalToBreak();
+    }
+    Find.TickManager?.Pause();
+
+    message ??= "Breakpoint hit: Test aborted and map retained for inspection.";
+    Fail(message);
+    throw new TestBreakException(message);
+  }
+
   public static IEnumerator Suspend(float secondsTimeOut, string message = null)
   {
     int countdownTime = Mathf.CeilToInt(secondsTimeOut);
